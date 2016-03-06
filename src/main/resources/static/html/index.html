@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>main</title>
+    <link rel="stylesheet" type="text/css" href="../plugins/metro-bootstrap/3.2.0/css/metro-bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="../styles/base.css">
+    <link rel="stylesheet" type="text/css" href="../styles/index.css">
+    <!-- modules -->
+    <link rel="stylesheet" type="text/css" href="../modules/menubar/menubar.css">
+    <link rel="stylesheet" type="text/css" href="../modules/pagination/pagination.css">
+
+    <!-- plugins -->
+    <link rel="stylesheet" type="text/css" href="../plugins/laydate/need/laydate.css">
+    <link rel="stylesheet" type="text/css" href="../plugins/laydate/skins/danlan/laydate.css" id="LayDateSkin">
+</head>
+<body>
+    <!-- 统一的页首文件 -->
+    <div id="common-header"></div>
+    <!-- //统一的页首文件 -->
+
+    <div class="wrap"></div>
+    <div class="right-wrap"></div>
+    
+    <!-- 统一的页脚文件 -->
+    <div id="common-footer"></div>
+    <!-- //统一的页脚文件 -->
+
+    <script type="text/javascript">
+        /**
+         * 开发环境下，通过动态版本号禁用缓存.
+         */
+        function ver(){
+            return (new Date()).getTime();
+        }
+    </script>
+    <script type="text/javascript" src="../plugins/My97DatePicker/WdatePicker.js"></script>
+    <script type="text/javascript" src="../plugins/requirejs/2.1.20/require.min.js" data-main='../scripts/index.js'></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+.navbar{
+	background-color:#00B38A;
+	margin-bottom:0px;
+}
+.navbar a{
+	background-color:#00B38A !important;
+}
+.wrap{
+	width:15%;
+	position:absolute;
+	left:0px;
+	top:52px;
+	height:80%;
+}
+.right-wrap{
+	width:85%;
+	position: absolute;
+	left:15%;
+	top:52px;
+}
+#common-footer{
+	position: fixed;
+	left:0px;
+	bottom:0px;
+	width:100%;
+}

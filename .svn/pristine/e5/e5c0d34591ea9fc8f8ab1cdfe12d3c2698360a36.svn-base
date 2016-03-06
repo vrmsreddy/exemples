@@ -1,0 +1,14 @@
+.welcome{
+	width:300px;
+	height:200px;
+	margin:auto;
+	margin-top:200px;
+}
+.welcome p{
+	font-size:30px;
+	color:#00B38A;
+	font-weight: bold;
+}
+.welcome p.first{
+	text-indent: -60px;
+}

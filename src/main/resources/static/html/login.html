@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>main</title>
+    <link rel="stylesheet" type="text/css" href="../plugins/metro-bootstrap/3.2.0/css/metro-bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="../styles/base.css">
+    <link rel="stylesheet" type="text/css" href="../styles/index.css">
+    <!-- modules -->
+    <link rel="stylesheet" type="text/css" href="../modules/menubar/menubar.css">
+    <link rel="stylesheet" type="text/css" href="../modules/pagination/pagination.css">
+
+    <!-- plugins -->
+    <link rel="stylesheet" type="text/css" href="../plugins/laydate/need/laydate.css">
+    <link rel="stylesheet" type="text/css" href="../plugins/laydate/skins/danlan/laydate.css" id="LayDateSkin">
+    <style>
+        #form-box input{
+            margin: 3px 10px;
+            height: 30px;
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+<!-- 统一的页首文件 -->
+<div id="common-header"></div>
+<!-- //统一的页首文件 -->
+
+<div class="container-fluid container-login" style="min-height: 750px;">
+    <div class="wrap" style="width: 100%;">
+        <form id="form-box" style="margin-left: 40%;margin-top: 60px">
+            <div class="li li-username username-top">
+                <div class="input-boder">
+                    <b class="icon icon-img1"></b>
+                    用户名
+                    <input style="border: 1px solid #DDD;hi" type="text" id="username" name="username" placeholder="请输入用户名">
+                </div>
+            </div>
+            <div class="li li-password">
+                <div class="input-boder">
+                    <b class="icon icon-img2"></b>
+                    密&#12288;码
+                    <input style="border: 1px solid #DDD;" type="password" id="password" name="password" placeholder="请输入密码">
+                </div>
+            </div>
+            <div class="li-submit" style="margin-top: 20px;margin-left: 70px;">
+                <input style="width: 100px;border: 1px solid #DDD;background: #00B38A;color: #FFF;" type="submit" id="j-login" value="立即登录">
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 统一的页脚文件 -->
+<div id="common-footer"></div>
+<!-- //统一的页脚文件 -->
+
+<script type="text/javascript" src="../plugins/jquery/2.1.4/jquery.min.js"></script>
+<script type="text/javascript" src="../plugins/metro-bootstrap/3.2.0/bootstrap.min.js"></script>
+<script type="text/javascript" src="../plugins/My97DatePicker/WdatePicker.js"></script>
+
+<!-- system entry -->
+<script type="text/javascript" src="../plugins/requirejs/2.1.20/require.min.js" data-main='../scripts/login.js'></script>
+</body>
+</html>

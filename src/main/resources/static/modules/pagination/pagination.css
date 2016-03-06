@@ -1,0 +1,70 @@
+.pagin-btm{
+    height:40px;
+    padding-top: 20px;
+    zoom:1;
+    display: block;
+}
+.pagin{
+	overflow: hidden;
+}
+.pagin span,.pagin a{
+	display: inline-block;
+	position: relative;
+	height: 24px;
+	margin-left: 4px;
+	font-family: arial;
+	line-height: 24px;
+	overflow: hidden;
+	padding: 3px 4px;
+}
+.pagin a{
+	cursor: pointer;
+	background-color: #ACB6BE;
+	color: #FFF;
+	font-weight: 700;
+	padding: 3px 10px;
+}
+.pagin a:hover{
+	background-color: #819AB1;
+}
+.pagin .current{
+	color:#E57D57;
+}
+.pagin .current.prev, .pagin .current.next{
+	display: none;
+}
+.pagin .prev,.pagin .next{
+	font-weight: normal;
+}
+.pagin .prev{
+	padding-left:20px;
+	border-radius: 3px 0 0 3px;
+}
+.pagin .next{
+	padding-right:20px;
+	border-radius: 0 3px 3px 0;
+}
+.pagin .prev b,.pagin .next b{
+	display:block;
+	position:absolute;
+	top:10px;
+	width: 0;
+	height: 0;
+	overflow:hidden;
+	background-color: transparent;
+	border-color: transparent transparent transparent transparent;
+	border-style: dashed dashed dashed dashed;
+	border-width: 5px;
+}
+.pagin .prev b{
+	background-position:-6px 0;
+	left:4px;
+	border-right-color: #fff;
+	border-right-style: solid;
+}
+.pagin .next b{
+	background-position:-1px 0;
+	right:4px;
+	border-left-color: #fff;
+	border-left-style: solid;
+}

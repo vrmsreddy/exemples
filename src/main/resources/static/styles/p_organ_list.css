@@ -1,0 +1,23 @@
+table .normal{
+	color:#00B38A;
+}
+table .never{
+	color:red;
+}
+#myModal1 img{
+	width: 160px;
+	height: 100px;
+}
+#myModal1 .iconfont{
+	float: right;
+	font-size: 20px;
+}
+#addPicBox .iconfont{
+	float: inherit;
+	font-size: 100px;
+	color: cornflowerblue;
+}
+#addPicBox{
+	margin-top:50px;
+	margin-bottom:30px;
+}

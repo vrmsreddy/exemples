@@ -1,0 +1,272 @@
+package com.hyzx.xschool.service.impl;
+
+import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
+import com.hyzx.xschool.domain.Location;
+import com.hyzx.xschool.domain.Organization;
+import com.hyzx.xschool.domain.User;
+import com.hyzx.xschool.domain.UserOrganization;
+import com.hyzx.xschool.domain.UserTrainPlanRecord;
+import com.hyzx.xschool.domain.enums.UserType;
+import com.hyzx.xschool.domain.repository.LocationRepository;
+import com.hyzx.xschool.domain.repository.OrganizationRepository;
+import com.hyzx.xschool.domain.repository.TopicStoreRepository;
+import com.hyzx.xschool.domain.repository.UserOrganizationRepository;
+import com.hyzx.xschool.domain.repository.UserRepository;
+import com.hyzx.xschool.domain.repository.UserTrainPlanRecordRepository;
+import com.hyzx.xschool.exception.BizException;
+import com.hyzx.xschool.service.UserService;
+import com.hyzx.xschool.util.PasswordEncoder;
+import com.hyzx.xschool.util.SMSUtil;
+import com.hyzx.xschool.web.controller.request.UserPassFormBean;
+import com.hyzx.xschool.web.controller.request.UserQueryFormBean;
+import com.hyzx.xschool.web.controller.response.OrganizationInfo;
+import com.hyzx.xschool.web.controller.response.UserTrainPlanInfo;
+import org.apache.commons.lang.Validate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+
+import java.time.LocalDate;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
+
+/**
+ * 用户业务相关实现类
+ *
+ * @author royguo
+ * @since 0.1.0
+ */
+@Service
+@Transactional(isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRED)
+public class UserServiceImpl implements UserService {
+  private static Logger LOGGER = LoggerFactory.getLogger(UserServiceImpl.class);
+
+  @Autowired
+  UserRepository userRepository;
+
+  @Autowired
+  UserTrainPlanRecordRepository userTrainPlanRecordRepository;
+
+  @Autowired
+  TopicStoreRepository topicStoreRepository;
+
+  @Autowired
+  UserOrganizationRepository userOrganizationRepository;
+  @Autowired
+  OrganizationRepository organizationRepository;
+
+  @Autowired
+  LocationRepository locationRepository;
+
+  @Override
+  public User findById(Long id) {
+    return userRepository.findOne(id);
+  }
+
+  @Override
+  public User login(String username, String password) {
+    List<Integer> userTypes =
+        Lists.newArrayList(UserType.NORMAL.getCode(), UserType.OUTSIDE.getCode());
+    System.out.println(userTypes+"......");
+    User user = userRepository.findByNicknameAndTypeIn(username, userTypes);
+    if (user == null) {
+      throw new BizException("用户名或密码错误");
+    }
+
+    if (!PasswordEncoder.checkPassword(password, user.getPwd())) {
+      throw new BizException("用户名或密码错误");
+    }
+    return user;
+  }
+
+  @Override
+  public Page<User> findByPage(UserQueryFormBean q) {
+    Pageable pageable =
+        new PageRequest(q.getPageNo() - 1, q.getPageSize(), new Sort(Sort.Direction.DESC, "id"));
+
+    Page<User> page = null;
+    if (Strings.isNullOrEmpty(q.getNick()) && Strings.isNullOrEmpty(q.getMobile())) {
+      page = userRepository.findAll(pageable);
+    } else if (Strings.isNullOrEmpty(q.getNick())) {
+      page = userRepository.findByMobile(q.getMobile(), pageable);
+    } else if (Strings.isNullOrEmpty(q.getMobile())) {
+      page = userRepository.findByNicknameContaining(q.getNick(), pageable);
+    } else {
+      page = userRepository.findByNicknameContainingAndMobile(q.getNick(), q.getMobile(), pageable);
+    }
+//    page.getContent().forEach(u -> u
+//        .setCreateTime(new DateTime(Long.parseLong(u.getCreateTime())).toString(Constants.DATE_TIME_LONG_FORMAT)));
+    return page;
+  }
+
+  @Override
+  public void modifyPass(UserPassFormBean passVo) {
+    Validate.notNull(passVo.getUserId());
+
+    User user = userRepository.findOne(passVo.getUserId());
+    if (user == null) {
+      throw new BizException("用户不存在");
+    }
+
+    // 检查旧密码是否正确
+    if (!PasswordEncoder.checkPassword(passVo.getOldPass(),user.getPwd())) {
+      throw new BizException("原密码不正确");
+    }
+
+    // 更新用户登录密码
+    String newPwdEncoded =  String.valueOf(passVo.getNewPass());
+   // String newPwdEncoded = encryptPassText(String.valueOf(passVo.getNewPass()));
+
+    LOGGER.info("----reset pass to {},encoded={}",passVo.getNewPass(),newPwdEncoded);
+    user.setPwd(newPwdEncoded);
+    userRepository.save(user);
+  }
+
+  @Override
+  public List<OrganizationInfo> findFavoriteOranizations(Long userId) {
+    List<UserOrganization> list = userOrganizationRepository.findByUserId(userId);
+    if (CollectionUtils.isEmpty(list)) {
+      return Collections.emptyList();
+    }
+
+    List<Long> organIds = list.stream().map(UserOrganization::getOrganizationId).collect(toList());
+    List<Organization> organs = organizationRepository.findAll(organIds);
+
+    // 获取机构中的位置
+//    Set<Long> locationIds = organs.stream().map(Organization::getLocationId).collect(toSet());
+//    List<Location> locations = locationRepository.findAll(locationIds);
+//    Map<Long, Location> locationMap = locations.stream().collect(Collectors.toMap(Location::getId, (l) -> l));
+
+    // 组装页面
+    return organs.stream().map(org -> {
+      OrganizationInfo info = new OrganizationInfo();
+      info.setId(org.getId());
+      info.setName(org.getName());
+      info.setPhone(org.getPhone());
+      info.setShareNum(org.getShareNum().intValue());
+      info.setProfile(org.getProfile());
+      // 设置前端显示的位置
+      info.setLocation(org.getConAddress());
+      //Location lo = locationMap.get(org.getLocationId());
+      //info.setLocation(lo.getCity() + "-" + lo.getCounty() + "-" + lo.getName());
+      return info;
+    }).collect(Collectors.toList());
+  }
+
+  @Override
+  public void resetPassword(Long userId) {
+    User user = userRepository.findOne(userId);
+    if (user == null) {
+      throw new BizException("用户不存在");
+    }
+    // 检查用户手机号
+    String mobile = user.getMobile();
+    if (Strings.isNullOrEmpty(mobile)) {
+      throw new BizException("用户手机号不存在");
+    }
+    // 发送随机生成的新密码到用户手机
+    int newRandomPass = (int) (100000 + new Random().nextFloat() * 900000);
+    SMSUtil.sendSms(mobile, "您的用户密码已重置为【" + newRandomPass + "】，请尽快登录百家学应用客户端进行修改。");
+    // 更新用户密码
+    //user.setPwd(encryptPassText(String.valueOf(newRandomPass)));
+    user.setPwd(String.valueOf(newRandomPass));
+    userRepository.save(user);
+  }
+
+  /**
+   * 对原始密码文本进行加密
+   * @param originPassword
+   * @return
+   */
+  private String encryptPassText(String originPassword){
+    return PasswordEncoder.encode(String.valueOf(originPassword));
+  }
+
+  @Override
+  public Page<UserTrainPlanInfo> findTrainPlanByPage(Pageable pageable) {
+
+    Page<UserTrainPlanRecord> page = userTrainPlanRecordRepository.findAll(pageable);
+    if (!page.hasContent()) {
+      new PageImpl(Collections.emptyList());
+    }
+
+    // 获取用户信息、培养方案信息
+    List<Long> userIds = page.getContent().stream().map(UserTrainPlanRecord::getUserId).collect(
+        toList());
+    Map<Long, User> userMap =
+        userRepository.findAll(userIds).stream().collect(Collectors.toMap(User::getId, u -> u));
+
+    // 组装前端显示数据
+    List<UserTrainPlanInfo> list = page.getContent().stream().map(r -> {
+      UserTrainPlanInfo info = new UserTrainPlanInfo();
+      // 设置用户信息
+      User user = userMap.get(r.getUserId());
+      info.setNick(user.getNickname());
+      info.setMobile(user.getMobile());
+      // 设置培养方案
+
+      info.setTrainPlanName(r.getEvaluationName());
+      //TODO
+            info.setStatus(String.valueOf(r.getStatus()));
+      info.setCompletePledge(r.getCompleteDegree());
+      // 设置孩子信息
+      // 根据孩子出生年份计算出年龄
+      info.setChildAge(LocalDate.now().getYear()-Integer.parseInt(r.getChildBirthday()));
+      info.setChildOrder(r.getChildTop().intValue());
+
+      return info;
+    }).collect(toList());
+
+    return new PageImpl(list, pageable, page.getTotalElements());
+  }
+
+
+  private String buildTrainPlanName(UserTrainPlanRecord record) {
+    String childNumInChinese = null;
+    switch (record.getChildTop()) {
+      case 1:
+        childNumInChinese = "老大";
+      break;
+      case 2:
+        childNumInChinese =  "老二";
+      break;
+      case 3:
+        childNumInChinese =  "老三";
+      break;
+      case 4:
+        childNumInChinese =  "老四";
+      break;
+      case 5:
+        childNumInChinese =  "老五";
+      break;
+      case 6:
+        childNumInChinese =  "老六";
+      break;
+      case 7:
+        childNumInChinese =  "老七";
+      break;
+      case 8:
+        childNumInChinese =  "老八";
+      break;
+    }
+    return childNumInChinese + record.getEvaluationName();
+  }
+}

@@ -1,0 +1,109 @@
+package com.hyzx.xschool.web.controller;
+
+import com.hyzx.xschool.config.OSSConfig;
+import com.hyzx.xschool.domain.Resource;
+import com.hyzx.xschool.domain.repository.ResourceRepository;
+import com.hyzx.xschool.service.OssService;
+import com.hyzx.xschool.util.Constants;
+import com.hyzx.xschool.util.FileUtil;
+import com.hyzx.xschool.web.RestResult;
+
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+
+import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.FileSystemUtils;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.UUID;
+
+/**
+ * TODO
+ *
+ * @author youblade
+ * @created 2015-11-13 13:04
+ */
+@Api(value = "文件管理", produces = "application/json")
+@RestController
+@RequestMapping("/file")
+public class FileController {
+
+  private static final Logger log = LoggerFactory.getLogger(FileController.class);
+
+  @Autowired
+  OssService ossService;
+  @Autowired
+  OSSConfig ossConfig;
+  @Autowired
+  ResourceRepository resourceRepository;
+
+  //@formatter:off
+  @ApiOperation(value = "上传文件", notes = "上传文件到服务器/tmp")
+  @RequestMapping(value = "/upload", method = RequestMethod.POST)
+  @ResponseBody
+  //@formatter:on
+  public RestResult<Resource> handleFileUpload(@RequestParam("file") MultipartFile file) throws IOException {
+    if (file.isEmpty()) {
+      return RestResult.invalidParams("上传文件不能为空");
+    }
+
+    // 设置文件扩展名
+    String originFileName = file.getOriginalFilename();
+    String filePath = Constants.LOCAL_UPLOAD_DIR + UUID.randomUUID().toString() + FileUtil.getExtension(originFileName);
+    log.info("Upload file={} to server with new name={}", originFileName, filePath);
+
+    // 初始化上传目录
+    File directory = new File(Constants.LOCAL_UPLOAD_DIR);
+    if (!directory.exists()) {
+      directory.mkdirs();
+    }
+
+    BufferedOutputStream stream =
+        new BufferedOutputStream(new FileOutputStream(new File(filePath)));
+    stream.write(file.getBytes());
+    stream.close();
+
+    // 保存资源
+    Resource resource = new Resource();
+    resource.setName(originFileName);
+    resource.setPath(filePath);
+    resource.setFile(resource.getPath().replace(ossConfig.getDownloadEndpoint(), ""));
+    resource.setType(1);
+    resourceRepository.save(resource);
+
+    return RestResult.ok(resource);
+  }
+
+  //@formatter:off
+  @ApiOperation(value = "直接上传文件到OSS", notes = "直接上传文件到OSS服务器")
+  @RequestMapping(value = "/uploadToOSS", method = RequestMethod.POST)
+  @ResponseBody
+  //@formatter:on
+  public RestResult<Resource> handleFileUploadToOSS(@RequestParam("file") MultipartFile file) throws IOException {
+    if (file.isEmpty()) {
+      return RestResult.invalidParams("上传文件不能为空");
+    }
+    // 设置文件扩展名
+    String originFileName = file.getOriginalFilename();
+    // 保存资源
+    Resource resource = new Resource();
+    resource.setName(originFileName);
+    resource.setType(1);
+    String ossFileUrl = ossService.upload("images", file);
+    resource.setPath(ossFileUrl);
+    resource.setFile(resource.getPath().replace(ossConfig.getDownloadEndpoint(), ""));
+    resourceRepository.save(resource);
+
+    log.info("Upload file={} to oss with  path={}", originFileName, ossFileUrl);
+
+    return RestResult.ok(resource);
+  }
+}

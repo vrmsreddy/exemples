@@ -1,0 +1,83 @@
+/**
+ * 统一HTTP请求逻辑封装，可以根据当前系统需要的code进行错误处理.
+ */
+// @sourceURL=http.js
+define(['jquery'],function($){
+
+    /**
+     * 真正执行Ajax方法.
+     * method : GET/POST
+     * data : request params
+     * async : 异步true/同步false
+     * success_callback : 成功回调
+     * error_callback : 失败回调
+     */
+    function doAjax(method, url, data, async, success_callback, error_callback) {
+        // filter params
+        //for(var key in data){
+        //    console.log('---p--', data[key]);
+        //    if(data[key] && data[key].constructor == String){
+        //        data[key] = $.trim(data[key]);
+        //    }
+        //}
+        $.ajax({
+            type: method,
+            url: url,
+            data: JSON.stringify(data),
+            async: async,
+            dataType: 'json',
+            xhrFields: {
+                withCredentials: true
+            },
+            beforeSend: function (xhr) {
+                // json格式传输，后台应该用@RequestBody方式接受
+                xhr.setRequestHeader("Content-Type", "application/json;charset=utf-8");
+//                var token = $.cookie("token");
+//                if (token) {
+                    // 服务器端如果需要多服务器支持，则需要通过token进行客户端认证.
+//                    xhr.setRequestHeader("X-Auth-Token", token);
+//                }
+            },
+            success: function (resp) {
+                console.log('--ajax:success--' + resp.code);
+                if (resp.code === 500) {
+                    alert('系统异常，请联系管理员');
+//                    console.log("后台系统错误:" + url);
+//                    window.location.href = "p_page_500.html";
+                    return;
+                } else if (resp.code === 555 ) {
+                    alert('操作失败：' + resp.msg);
+                    return;
+                } else if (resp.code === 400 ) {
+                    alert(resp.msg);
+                    return;
+                } else if (resp.code === 403 ) {
+                    alert('会话已过期，请重新登录');
+                    window.location.href = "p_login.html";
+                } else if (typeof(success_callback) != "undefined") {
+                    success_callback(resp);
+                }
+                //success_callback(resp);
+            },
+            error: function (XMLHttpRequest, resp) {
+                console.log('err http code:' + resp.status);
+                if(XMLHttpRequest.status == "404"){
+                    that.alert("网络连接不通或访问地址不存在！");
+                    return;
+                }
+                if (typeof(error_callback) != "undefined") {
+                    error_callback(resp);
+                }
+            }
+        });
+    };
+
+    return {
+        get: function(url, data, async, success_callback, error_callback){
+            doAjax("GET", url, data, async, success_callback, error_callback);
+        },
+        post: function(url, data, async, success_callback, error_callback){
+            doAjax("POST", url, data, async, success_callback, error_callback);
+        }
+    }
+});

@@ -1,0 +1,166 @@
+<meta charset="UTF-8">
+<link rel="stylesheet" type="text/css" href="../styles/p_user_list.css">
+<link rel="stylesheet" type="text/css" href="../styles/p_insitution_list.css">
+
+<div class="container-fluid">
+    <h2 class="title">课程管理</h2>
+	<form class="form-inline" id="QueryCourseNameForm">
+	    <a href="#" class="btn btn-success btn-color" id='J_add' data-toggle="modal" data-target="#myModal">添加课程</a>
+		<div class="form-group">
+			<label for="courseName">课程名称</label> <input type="text"
+				class="form-control" name="courseName" id="courseName">
+		</div>
+		<a class="btn btn-default bt-color btn-sm" role="button" id="queryCourseNameList">
+		    <span  class="gicon">搜索</span>
+	    </a>
+	</form>
+	   <div id="course_list"></div>
+          <nav>
+    <div class="pagin-btm clearFix innerWord">
+        <div class="pagin" id="page"></div>
+    </div>
+    </nav>  
+	
+	<nav>
+        <div class="pagination pull-right radiusIcon" style="margin:10px 0px;" id="page">
+        </div>
+    </nav>
+    <!-- Modal -->
+	<div class="modal fade" data-backdrop  id="myModal" tabindex="-1" role="dialog"
+		aria-labelledby="myModalLabel">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal"
+						aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+					<h4 class="modal-title" id="myModalLabel">课程编辑</h4>
+				</div>
+				<div class="modal-body"> 
+					<div class="container-fluid">
+						<form class="form-horizontal" id="UserFormBean">
+
+							<div class="form-group">
+								<label for="inputEmail3" class="col-sm-2 control-label">课程名</label>
+								<div class="col-sm-10">
+									<input type="text" class="form-control" id="J_name" name="name"
+										required="required" maxLength="20" normalWord placeholder="请输入课程名">
+										<span class="hide" style="color:red;" id="usernameBox" ></span>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="inputEmail3" class="col-sm-2 control-label">一级分类</label>
+								<div class="col-sm-10">
+									<select class="form-control" required id="J_pCatId">
+									</select>
+									<span class="hide" style="color:red;"></span>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="inputEmail3"  class="col-sm-2 control-label">二级分类</label>
+								<div class="col-sm-10">
+									<select class="form-control"  required id="J_catId">
+									</select>
+									<span class="hide" style="color:red;"></span>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="inputEmail3" class="col-sm-2 control-label">年龄区间</label>
+								<div class="col-sm-10">
+									<select class="form-control" id="J_age">
+										<option value="0-3">0-3</option>
+										<option value="4-6">4-6</option>
+										<option value="7-12">7-12</option>
+									</select>
+									<span class="hide" style="color:red;" id="phoneBox"></span>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="inputEmail3" class="col-sm-2 control-label">机构名称</label>
+								<div class="col-sm-10">
+									<select class="form-control" id="J_orgId">
+									</select>
+									<span class="hide" style="color:red;"></span>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="inputEmail3" class="col-sm-2 control-label">排序</label>
+								<div class="col-sm-10">
+									<input type="text" class="form-control" id="J_order"
+										required="required" value="50" range="[1,100]" placeholder="0～100 数字越小 排序越前">
+										<span class="hide" style="color:red;" id="usernameBox"></span>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="inputEmail3" class="col-sm-2 control-label">课程描述</label>
+								<div class="col-sm-10">
+									<textarea style="width:100%" rows="4" required="required"  id="J_describe"></textarea>
+								    <span class="hide" style="color:red;" id="imgBox"></span>
+								</div>
+							</div>
+
+						</form>
+					</div>
+				</div>
+				<div class="modal-footer" style="text-align: center">
+					<button type="button" class="btn btn-default" id="closeUserForm" onclick="console.log()"data-dismiss="modal">取消</button>
+					<input type="submit" class="btn btn-info" 
+						value="保存" id="J_saveCourse" onclick="console.log()">
+				</div>
+			</div>
+		</div>  
+	</div>
+
+	<!-- templates -->
+        <script id="t:v_empty_list" type="text/html">
+            <div class="codeContent field min-height" id="project-interface">
+                <div class="cooperate-status">
+                    <p>当前列表没有数据！</p>
+                </div>
+            </div>
+        </script>
+
+        <script id="t:v_area_list" type="text/html">
+            {{each list as region}}
+            <option value="{{region.id}}">{{region.name}}</option>
+            {{/each}}
+        </script>
+	   <script id="t:course_list" type="text/html">
+            <table class="table table-striped table-bordered" style="margin-bottom: 0px">
+                <tbody>
+                <tr>
+                <td>课程名称</td>
+				<td>一级分类</td>
+				<td>二级分类</td>
+				<td>所属机构</td>
+				<td>适合年龄</td>
+				<td>排序</td>
+				<td>操作</td
+                </tr>
+                {{each list as l}}
+                <tr>
+                   <td>{{l.name}}</td>
+                   <td>{{l.parentCateName}}</td>
+                   <td>{{l.cateName}}</td>  
+                   <td>{{l.orgnaztion}}</td>  
+                   <td>{{l.fitAge}}</td>  
+                   <td>{{l.priority}}</td>            
+                    <td>
+                                       
+                              <a href="#" class="J_edit" data-id="{{l.id}}" data-name="{{l.name}}" data-age="{{l.fitAge}}"
+                               data-pcatid="{{l.parentCateId}}" data-catid="{{l.categoryId}}"  data-orgid="{{l.organizationId}}"
+                               data-order = "{{l.priority}}" data-describe ="{{l.remark}}"
+                           data-name="{{l.name}}" 
+                           data-toggle="modal" data-target="#myModal">编辑</a>&nbsp;&nbsp;&nbsp;
+                        <a href="#" class="J_removeCourse" data-id="{{l.id}}">删除</a>&nbsp;&nbsp;&nbsp;
+                      
+                    </td>
+                </tr>
+                {{/each}}  
+                </tbody>
+            </table>
+        </script>
+    <script type="text/javascript" src="../modules/dateFormat/dateFormat.js"></script>
+     <script type="text/javascript" src="../scripts/p_course_list.js"></script>
+</div>

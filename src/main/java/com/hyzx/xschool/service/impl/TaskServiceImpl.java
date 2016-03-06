@@ -1,0 +1,189 @@
+package com.hyzx.xschool.service.impl;
+
+import com.google.common.base.Strings;
+import com.hyzx.xschool.config.OSSConfig;
+import com.hyzx.xschool.domain.Resource;
+import com.hyzx.xschool.domain.Task;
+import com.hyzx.xschool.domain.TopicStore;
+import com.hyzx.xschool.domain.repository.ResourceRepository;
+import com.hyzx.xschool.domain.repository.TaskRepository;
+import com.hyzx.xschool.domain.repository.TopicStoreRepository;
+import com.hyzx.xschool.exception.BizException;
+import com.hyzx.xschool.service.OssService;
+import com.hyzx.xschool.service.ResourceService;
+import com.hyzx.xschool.service.TaskService;
+import com.hyzx.xschool.web.controller.request.TaskFormBean;
+import com.hyzx.xschool.web.controller.request.TaskQueryBean;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.FileSystemUtils;
+
+import java.io.File;
+import java.util.Date;
+
+/**
+ * 任务service实现类
+ * 
+ * @author qly
+ *
+ */
+@Service
+@Transactional(isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRED)
+public class TaskServiceImpl implements TaskService {
+
+  @Autowired
+  TaskRepository taskRepository;
+  @Autowired
+  ResourceService resourceService;
+  @Autowired
+  ResourceRepository resourceRepository;
+  @Autowired
+  OssService ossService;
+  @Autowired
+  OSSConfig ossConfig;
+  @Autowired
+  TopicStoreRepository topicStoreRepository;
+
+  @Override
+  public Page<Task> findByNameAndTopicStoreId(TaskQueryBean t) {
+    Pageable pageable = new PageRequest(t.getPageNo() - 1, t.getPageSize(), new Sort(Sort.Direction.DESC, "id"));
+
+    Page<Task> page = null;
+    if (Strings.isNullOrEmpty(t.getName()) && t.getTopicStoreId() < 1) {
+      page = taskRepository.findAll(pageable);
+    } else if (Strings.isNullOrEmpty(t.getName())) {
+      page = taskRepository.findByTopicStoreId(t.getTopicStoreId(), pageable);
+    } else if (t.getTopicStoreId() < 1) {
+      page = taskRepository.findByNameContaining(t.getName(), pageable);
+    } else {
+      page = taskRepository.findByNameContainingAndTopicStoreId(t.getName(), t.getTopicStoreId(), pageable);
+    }
+    return page;
+  }
+
+  @Override
+  public void save(TaskFormBean taskVo) {
+    Task taskToSave = null;
+    // 修改时-旧的题库主键
+    Long oldTopicStoreId = null;
+    if (taskVo.getId() != null) {
+      taskToSave = taskRepository.findOne(taskVo.getId());
+      if (taskToSave == null) {
+        throw new BizException("任务不存在");
+      }
+      oldTopicStoreId = taskToSave.getTopicStoreId();
+    } else {
+      taskToSave = new Task();
+      taskToSave.setCreateTime(new Date().getTime() + "");
+      taskToSave.setNoPlayTimes(0L);
+      taskToSave.setStatus(1);
+    }
+
+    if (!taskVo.getPicRescoureId().equals(taskToSave.getVideoPicResourceId())) {
+      /**
+       * 清理旧图片
+       */
+
+      Long oldPicResourceId = taskToSave.getVideoPicResourceId();
+      if (oldPicResourceId != null && !taskVo.getPicRescoureId().equals(oldPicResourceId)) {
+        resourceService.remove(oldPicResourceId);
+      }
+
+      /**
+       * 处理新图片
+       */
+      // 上传新的图片到OSS
+      Resource picResource = resourceRepository.findOne(taskVo.getPicRescoureId());
+      if (picResource.isLocalFile()) {
+        File picFile = new File(picResource.getPath());
+        String ossPicUrl = ossService.upload("images/category", picFile);
+        picResource.setPath(ossPicUrl);
+        picResource.setFile(picResource.getPath().replace(ossConfig.getDownloadEndpoint(), ""));
+        resourceRepository.save(picResource);
+        // 上传成功后删除本地的旧图片
+        FileSystemUtils.deleteRecursively(picFile);
+      }
+      taskToSave.setVideoPicResourceId(taskVo.getPicRescoureId());
+    }
+    // TODO 获取视频及图片地址，移到到OCS
+    // 清理旧图片
+    // Long oldPicResId = taskToSave.getVideoPicResourceId();
+    // if (oldPicResId != null &&
+    // !taskVo.getPicRescoureId().equals(oldPicResId)) {
+    // resourceService.remove(oldPicResId);
+    // }
+    // //上传新的图片到OSS
+    // Resource picResource =
+    // resourceRepository.findOne(taskVo.getPicRescoureId());
+    // if (picResource.isLocalFile()) {
+    // String ossPicUrl = ossService.upload("task/images", new
+    // File(picResource.getPath()));
+    // picResource.setPath(ossPicUrl);
+    // resourceRepository.save(picResource);
+    // }
+    // taskToSave.setVideoPicResourceId(picResource.getId());
+
+    // 清理旧视频
+    // Long oldVideoResId = taskToSave.getVideoResourceId();
+    // if (oldVideoResId != null &&
+    // !taskVo.getVideoResourceId().equals(oldVideoResId)) {
+    // resourceService.remove(oldVideoResId);
+    // }
+    // //上传新视频到OSS
+    // Resource videoResource =
+    // resourceRepository.findOne(taskVo.getVideoResourceId());
+    // if (videoResource.isLocalFile()) {
+    // //TODO 使用OSS分片上传？若使用前端直接分片上传到OSS，则此处无需后端处理
+    // String ossPicUrl = ossService.upload("task/video", new
+    // File(videoResource.getPath()));
+    // videoResource.setPath(ossPicUrl);
+    // resourceRepository.save(videoResource);
+    // }
+    // taskToSave.setVideoPicResourceId(videoResource.getId());
+
+    // 更新视频链接
+    Resource videoResource = null;
+    if (taskToSave.getVideoResourceId() != null) {
+      videoResource = resourceRepository.findOne(taskToSave.getVideoResourceId());
+    } else {
+      videoResource = new Resource();
+      videoResource.setName("video");
+      // TODO confirm
+      videoResource.setType(2);
+    }
+    videoResource.setPath(taskVo.getVideoPath());
+    resourceRepository.save(videoResource);
+    taskToSave.setVideoResourceId(videoResource.getId());
+
+    // 保存任务
+    taskToSave.setName(taskVo.getName());
+    taskToSave.setTopicStoreId(taskVo.getTopicStoreId());
+    taskToSave.setHardType(taskVo.getHardType());
+    taskToSave.setDetail(taskVo.getDetail());
+    // taskToSave.setVideoPicResourceId(taskVo.getVideoResourceId());
+
+    taskRepository.save(taskToSave);
+
+    // 更新对应题库中的任务数量
+    Integer taskNum = taskRepository.countByTopicStoreId(taskToSave.getTopicStoreId());
+    TopicStore ts = topicStoreRepository.findOne(taskToSave.getTopicStoreId());
+    ts.setTaskNum(taskNum);
+    topicStoreRepository.save(ts);
+    // 更新任务时，若修改了所在题库，则更新下旧的题库任务数量
+    if (oldTopicStoreId != null && oldTopicStoreId.longValue() != taskToSave.getTopicStoreId().longValue()) {
+      Integer oldTaskNum = taskRepository.countByTopicStoreId(oldTopicStoreId);
+      TopicStore oldTs = topicStoreRepository.findOne(oldTopicStoreId);
+      oldTs.setTaskNum(oldTaskNum);
+      topicStoreRepository.save(oldTs);
+    }
+  }
+
+}

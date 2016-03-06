@@ -1,0 +1,162 @@
+package com.hyzx.xschool.service.impl;
+
+import java.io.File;
+import java.util.Date;
+
+import org.joda.time.DateTime;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.FileSystemUtils;
+
+import com.google.common.base.Strings;
+import com.hyzx.xschool.config.OSSConfig;
+import com.hyzx.xschool.domain.Article;
+import com.hyzx.xschool.domain.Resource;
+import com.hyzx.xschool.domain.repository.ArticleRepository;
+import com.hyzx.xschool.domain.repository.ResourceRepository;
+import com.hyzx.xschool.exception.BizException;
+import com.hyzx.xschool.service.ArticleService;
+import com.hyzx.xschool.service.OssService;
+import com.hyzx.xschool.service.ResourceService;
+import com.hyzx.xschool.util.Constants;
+import com.hyzx.xschool.web.controller.request.ArticleQueryVo;
+
+/**
+ * service实现类
+ *
+ * @author qly
+ */
+@Service
+@Transactional(isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRED)
+public class ArticleServiceImpl implements ArticleService {
+
+  @Autowired
+  ArticleRepository articleRepository;
+  @Autowired
+  ResourceService resourceService;
+  @Autowired
+  ResourceRepository resourceRepository;
+  @Autowired
+  OssService ossService;
+  @Autowired
+  OSSConfig ossConfig;
+
+  @Override
+  public Page<Article> findByPage(ArticleQueryVo arc) {
+    Pageable pageable = new PageRequest(arc.getPageNo() - 1, arc.getPageSize(),
+      new Sort(Sort.Direction.DESC, "priority"));
+
+    Page<Article> page = null;
+    if (Strings.isNullOrEmpty(arc.getKeyword())) {
+      page = articleRepository.findAll(pageable);
+    } else {
+      page = articleRepository.findByTitleContaining(arc.getKeyword(), pageable);
+    }
+
+    page.forEach(a -> {
+      a.setCreateTimeStr(
+        new DateTime(Long.parseLong(a.getCreateTime())).toString(Constants.DATE_TIME_LONG_FORMAT));
+    });
+    return page;
+  }
+
+  @Override
+  public void save(Article article) {
+    Article articleToSave = null;
+    if (article.getId() != null) {
+      articleToSave = articleRepository.findOne(article.getId());
+      if (articleToSave == null) {
+        throw new BizException("文章不存在");
+      }
+    } else {
+      articleToSave = new Article();
+      articleToSave.setStatus(0);
+      articleToSave.setCreateTime(new Date().getTime() + "");
+    }
+
+    articleToSave.setTitle(article.getTitle());
+    articleToSave.setPriority(article.getPriority());
+    if (article.getPriority() == null) {
+      articleToSave.setPriority(0);
+    }
+
+    articleToSave.setAuthor(article.getAuthor());
+    articleToSave.setProfile(article.getProfile());
+    articleToSave.setType(article.getType());
+    articleToSave.setOrganizationId(article.getOrganizationId());
+    articleToSave.setUrl(article.getUrl());
+    articleToSave.setIsBanner(article.getIsBanner());
+    if (Strings.isNullOrEmpty(article.getIsBanner())) {
+      articleToSave.setIsBanner("0");
+    }
+    articleToSave.setResourceId(article.getResourceId());
+    articleToSave.setDetail(article.getDetail());
+    articleRepository.save(articleToSave);
+
+    // 将文章主图上传到OSS
+    Resource picResource = resourceRepository.findOne(article.getResourceId());
+    if (picResource.isLocalFile()) {
+      File picFile = new File(picResource.getPath());
+      String ossPicUrl = ossService.upload("images/article", picFile);
+      picResource.setPath(ossPicUrl);
+      picResource.setFile(picResource.getPath().replace(ossConfig.getDownloadEndpoint(), ""));
+      resourceRepository.save(picResource);
+      // 上传成功后删除本地的旧图片
+      FileSystemUtils.deleteRecursively(picFile);
+    }
+  }
+
+  /**
+   * 保存文章的时候，将对应的图片信息上传到OSS上.
+   *
+   * @param resources
+   */
+  @Override
+  public void saveArticleImagesToOSS(Article article) {
+//    public void saveOrganPicRescources(List< OrganizationResource > picList) {
+      /*
+       * 前端删除图片时已经对应的机构资源关系、资源记录等删除，而添加图片时仅保存了资源记录，
+       * 故此处保存，只需要将本次新加图片资源生成建立的机构资源关系，将存储在本地的图片上传至OSS
+       */
+      // 将本次新加图片资源关联到机构上
+//      List<OrganizationResource> organResToAdd =
+//        picList.stream().filter(or -> or.getId() == null).collect(toList());
+//      if (!CollectionUtils.isEmpty(organResToAdd)) {
+//        organizationResourceRepository.save(organResToAdd);
+//      }
+//
+//      // 将本地图片资源上传到OSS中
+//      List<Long> picResources =
+//        picList.stream().map(OrganizationResource::getResourceId).collect(toList());
+//      List<Resource> resources = resourceRepository.findAll(picResources);
+//
+//      List<Resource> picToUpload =
+//        resources.stream().filter(r -> r.getPath().startsWith(Constants.LOCAL_UPLOAD_DIR))
+//          .collect(toList());
+//      if (CollectionUtils.isEmpty(picToUpload)) {
+//        log.info("No new picResource to add");
+//        return;
+//      }
+//
+//      picToUpload.forEach(c -> {
+//        log.info("Upload local file={} of rescource={} to OSS", c.getName(), c.getId());
+//
+//        File file = new File(c.getPath());
+//        String ossFileUrl = ossService.upload("images/organ", file);
+//        c.setPath(ossFileUrl);
+//        // 上传成功后删除本地图片
+//        if (StringUtils.isNotBlank(ossFileUrl)) {
+//          FileSystemUtils.deleteRecursively(file);
+//        }
+//      });
+//
+//      resourceRepository.save(picToUpload);
+  }
+}

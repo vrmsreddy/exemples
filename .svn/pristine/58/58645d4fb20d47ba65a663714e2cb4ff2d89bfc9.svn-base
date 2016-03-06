@@ -1,0 +1,178 @@
+package com.hyzx.xschool.service.impl;
+
+import com.hyzx.xschool.config.OSSConfig;
+import com.hyzx.xschool.domain.Category;
+import com.hyzx.xschool.domain.Course;
+import com.hyzx.xschool.domain.Resource;
+import com.hyzx.xschool.domain.repository.CategoryRepository;
+import com.hyzx.xschool.domain.repository.CourseRepository;
+import com.hyzx.xschool.domain.repository.ResourceRepository;
+import com.hyzx.xschool.exception.BizException;
+import com.hyzx.xschool.service.CategoryService;
+import com.hyzx.xschool.service.OssService;
+import com.hyzx.xschool.service.ResourceService;
+import com.hyzx.xschool.web.controller.request.CategoryFormBean;
+import com.hyzx.xschool.web.controller.request.CategoryQueryFormBean;
+
+import org.joda.time.DateTime;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.FileSystemUtils;
+
+import java.io.File;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toMap;
+import static java.util.stream.Collectors.toSet;
+
+/**
+ * 课程分类实现类
+ *
+ * @author qly
+ */
+@Service
+@Transactional(isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRED)
+public class CategoryServiceImpl implements CategoryService {
+
+  @Autowired
+  CategoryRepository categoryRepository;
+  @Autowired
+  CourseRepository courseRepository;
+
+  @Autowired
+  ResourceRepository resourceRepository;
+  @Autowired
+  OssService ossService;
+  @Autowired
+  OSSConfig ossConfig;
+  @Autowired
+  ResourceService resourceService;
+
+  @Override
+  public void save(CategoryFormBean category) {
+    Category categoryToSave = null;
+    if (category.getId() != null) {
+      categoryToSave = categoryRepository.findOne(category.getId());
+      if (categoryToSave == null) {
+        throw new BizException("课程分类不存在");
+      }
+    } else {
+      categoryToSave = new Category();
+      categoryToSave.setCreateTime(new Date().getTime() + "");
+    }
+
+    categoryToSave.setName(category.getName());
+    categoryToSave.setParentCategoryId(category.getParentId());
+    categoryToSave.setPriority(category.getOrder());
+
+    /**
+     * 清理旧图片
+     */
+    Long oldPicResourceId = categoryToSave.getResourceId();
+    if (oldPicResourceId != null && !category.getResourceId().equals(oldPicResourceId)) {
+      resourceService.remove(oldPicResourceId);
+    }
+
+    /**
+     * 处理新图片
+     */
+    //上传新的图片到OSS
+    Resource picResource = resourceRepository.findOne(category.getResourceId());
+    if (picResource.isLocalFile()) {
+      File picFile = new File(picResource.getPath());
+      String ossPicUrl = ossService.upload("images/category", picFile);
+      picResource.setPath(ossPicUrl);
+      picResource.setFile(picResource.getPath().replace(ossConfig.getDownloadEndpoint(), ""));
+      resourceRepository.save(picResource);
+      // 上传成功后删除本地的旧图片
+      FileSystemUtils.deleteRecursively(picFile);
+    }
+    categoryToSave.setResourceId(category.getResourceId());
+
+    /**
+     * 保存课程类目记录
+     */
+    categoryToSave.setIsHomeShow("0");
+    if (category.isHomePageShow()) {
+      categoryToSave.setIsHomeShow("1");
+    }
+    categoryRepository.save(categoryToSave);
+  }
+
+  @Override
+  public void remove(Long id) {
+    // 删除父分类：该分类下不包含子分类时才能删除
+    Category category = categoryRepository.findOne(id);
+    if (category.isParent()) {
+      Category anyChildCategory = categoryRepository.findFirstByParentCategoryId(id);
+      if (anyChildCategory != null) {
+        throw new BizException("当前分类下包含子分类，不能删除");
+      }
+      categoryRepository.delete(category);
+      return;
+    }
+
+    // 删除子分类：该分类下没有课程时才能删除
+    Course anyCourse = courseRepository.findFirstByCategoryId(id);
+    if (anyCourse != null) {
+      throw new BizException("当前分类下已存在课程，不能删除");
+    }
+    categoryRepository.delete(category);
+  }
+
+  @Override
+  public Page<Category> finzdByPage(CategoryQueryFormBean q) {
+    Pageable pageable =
+        new PageRequest(q.getPageNo() - 1, q.getPageSize(), new Sort(Sort.Direction.DESC, "id"));
+
+    Page<Category> page = null;
+    if (q.getParentCateId() == null || q.getParentCateId() <= 0) {
+      page = categoryRepository.findAll(pageable);
+    } else {
+      page = categoryRepository.findByParentCategoryId(q.getParentCateId(), pageable);
+    }
+    if (!page.hasContent()) {
+      return new PageImpl(Collections.emptyList());
+    }
+
+    // 设置图片资源URL
+    List<Long> picResoureIds =
+        page.getContent().stream().map(Category::getResourceId).collect(toList());
+    List<Resource> picResoures = resourceRepository.findAll(picResoureIds);
+    Map<Long, String> picMap =
+        picResoures.stream().collect(toMap(Resource::getId, Resource::getPath));
+
+    // 设置父类目名称
+    Set<Long> parentCateIds =
+        page.getContent().stream().filter(c -> c.getParentCategoryId() != null)
+            .map(Category::getParentCategoryId).collect(toSet());
+    List<Category> parentCates = categoryRepository.findAll(parentCateIds);
+    Map<Long, String> parentCateMap =
+        parentCates.stream().collect(toMap(Category::getId, Category::getName));
+
+    page.forEach(c -> {
+      c.setPicUrl(picMap.get(c.getResourceId()));
+      if (c.getParentCategoryId() != null) {
+        c.setParentCategoryName(parentCateMap.get(c.getParentCategoryId()));
+      }
+      // format time
+      c.setCreateTimeStr(
+          new DateTime(new Date(Long.parseLong(c.getCreateTime()))).toString("yyyy-MM-dd HH:mm:ss"));
+    });
+
+    return page;
+  }
+}

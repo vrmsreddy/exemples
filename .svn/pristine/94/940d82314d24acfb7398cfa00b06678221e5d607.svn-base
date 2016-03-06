@@ -1,0 +1,5 @@
+<link rel="stylesheet" type="text/css" href="../styles/p_welcome.css">
+<div class="welcome">
+    <p class="first">欢迎你进入</p>
+    <p>运营系统管理</p>
+</div>

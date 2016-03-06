@@ -1,0 +1,84 @@
+<meta charset="UTF-8">
+<link rel="stylesheet" type="text/css" href="../styles/p_user_list.css">
+<link rel="stylesheet" type="text/css" href="../styles/p_insitution_list.css">
+
+<div class="container-fluid">
+    <h2 class="title">评论管理</h2>
+	<form class="form-inline " id="QueryUserForm">
+		<div class="form-group">
+			<label for="username">时间段</label>
+			   <input id="J_startTime" type="text" class="form-control" placeholder="起始时间"/>
+	           <img onclick="WdatePicker({el:'J_startTime',dateFmt:'yyyy-MM-dd HH:mm:ss',autoPickDate:'true'})" src="../plugins/My97DatePicker/skin/datePicker.gif" width="25" height="16" align="absmiddle" style="position: relative;top:5px;right:30px">
+	           <input id="J_endTime" type="text" class="form-control" placeholder="结束时间"/>
+	           <img onclick="WdatePicker({el:'J_endTime',dateFmt:'yyyy-MM-dd HH:mm:ss',autoPickDate:'true'})" src="../plugins/My97DatePicker/skin/datePicker.gif" width="25" height="16" align="absmiddle" style="position: relative;top:5px;right:30px">
+		</div>
+		<div class="form-group">
+			<label for="username">筛选状态</label>
+			<select class="form-control" id="J_status">
+				<!--<option value="0">全部</option>-->
+				<option value="1">未通过</option>
+				<option value="2">已通过</option>
+				<option value="3">已拒绝</option>
+				<option value="-1">已删除</option>
+			</select>
+		</div>
+		<a class="btn btn-default bt-color btn-sm" role="button" id="J_search">
+		    <span  class="gicon">搜索</span>
+	    </a>
+	</form>
+	<div id="p_comment_list"></div>
+	<nav>
+    <div class="pagin-btm clearFix innerWord">
+        <div class="pagin" id="page"></div>
+    </div>
+    </nav>
+</div>
+    <!-- templates -->
+	<script id="t:v_empty_list" type="text/html">
+	    <div class="codeContent field min-height" id="project-interface">
+	        <div class="cooperate-status">
+	            <p>当前列表没有数据！</p>
+	        </div>
+	    </div>
+	</script>
+
+	<script id="t:p_comment_list" type="text/html">
+	    <table class="table table-striped table-bordered" style="margin-bottom: 0px">
+	        <tbody>
+	        <tr>
+	            <td>用户名</td>
+				<td>评论机构</td>
+				<td style="width: 250px;">内容</td>
+				<td>创建时间</td>
+				<td>审核时间</td>
+				<td>操作</td>
+	        </tr>
+	        {{each list as l}}
+	        <tr>
+	            <td>{{l.nick}}</td>
+	            <td>{{l.organization}}</td>
+	            <td>{{stripStr(l.content)}}</td>
+	            <td>{{l.createTime}}</td>
+	            <td>{{l.verifyTime}}</td>
+	            <td>
+	                
+	                {{if l.status==1}}
+	                <a href="#" data-id="{{l.id}}" data-status="2" class="J_update" >通过</a>&nbsp;&nbsp;&nbsp;
+	                <a href="#" data-id="{{l.id}}" data-status="3" class="J_update" >拒绝</a>
+	                {{else if l.status ==2 }}
+	                <!--<a href="#" data-id="{{l.id}}" data-status="3" class="J_update" >拒绝</a>-->
+					已通过&nbsp;&nbsp;&nbsp;
+	                <a href="#" data-id="{{l.id}}" data-status="-1" class="J_update" >删除</a>
+	                {{else if l.status ==3 }}
+	                <!--<a href="#" data-id="{{l.id}}" data-status="2" class="J_update" >通过</a>-->已拒绝&nbsp;&nbsp;&nbsp;
+	                <a href="#" data-id="{{l.id}}" data-status="-1" class="J_update" >删除</a>
+	                {{/if}}
+	            </td>
+	        </tr>
+	        {{/each}}
+	        </tbody>
+	    </table>
+	</script>
+    <script type="text/javascript" src="../modules/dateFormat/dateFormat.js"></script>
+    <script type="text/javascript" src="../plugins/My97DatePicker/WdatePicker.js"></script>
+    <script type="text/javascript" src="../scripts/p_comment_list.js"></script>

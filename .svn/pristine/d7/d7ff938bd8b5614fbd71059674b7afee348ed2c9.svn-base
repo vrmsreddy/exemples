@@ -1,0 +1,223 @@
+package com.hyzx.xschool.service.impl;
+
+import com.google.common.base.Strings;
+import com.hyzx.xschool.config.OSSConfig;
+import com.hyzx.xschool.domain.Article;
+import com.hyzx.xschool.domain.Organization;
+import com.hyzx.xschool.domain.OrganizationResource;
+import com.hyzx.xschool.domain.Resource;
+import com.hyzx.xschool.domain.enums.OpenStatus;
+import com.hyzx.xschool.domain.repository.ArticleRepository;
+import com.hyzx.xschool.domain.repository.LocationRepository;
+import com.hyzx.xschool.domain.repository.OrganizationRepository;
+import com.hyzx.xschool.domain.repository.OrganizationResourceRepository;
+import com.hyzx.xschool.domain.repository.ResourceRepository;
+import com.hyzx.xschool.exception.BizException;
+import com.hyzx.xschool.service.OrganizationService;
+import com.hyzx.xschool.service.OssService;
+import com.hyzx.xschool.util.Constants;
+import com.hyzx.xschool.web.controller.request.OrgQueryFormBean;
+import com.hyzx.xschool.web.controller.response.OrganizationInfo;
+
+import org.apache.commons.lang.StringUtils;
+import org.joda.time.DateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.FileSystemUtils;
+
+import java.io.File;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.toList;
+
+/**
+ * Created by jack on 15-11-7.
+ */
+@Service
+@Transactional(isolation = Isolation.REPEATABLE_READ, propagation = Propagation.REQUIRED)
+public class OrganizationServiceImpl implements OrganizationService {
+
+  private static final Logger log = LoggerFactory.getLogger(OrganizationServiceImpl.class);
+
+  @Autowired
+  OrganizationRepository organizationRepository;
+
+  @Autowired
+  LocationRepository locationRepository;
+
+  @Autowired
+  OrganizationResourceRepository organizationResourceRepository;
+  @Autowired
+  OssService ossService;
+  @Autowired
+  OSSConfig ossConfig;
+  @Autowired
+  ResourceRepository resourceRepository;
+
+  @Autowired
+  ArticleRepository articleRepository;
+
+  @Override
+    public Page<OrganizationInfo> findByPage(OrgQueryFormBean q) {
+
+      Pageable pageable =
+        new PageRequest(q.getPageNo() - 1, q.getPageSize(), new Sort(Sort.Direction.DESC, "id"));
+
+      Page<Organization> page = null;
+      // TODO WTF!
+      if (Strings.isNullOrEmpty(q.getName()) && Strings.isNullOrEmpty(q.getPhone())) {
+        page = organizationRepository.findAll(pageable);
+      } else if (Strings.isNullOrEmpty(q.getName())) {
+        page = organizationRepository.findByPhone(q.getPhone(), pageable);
+      } else if (Strings.isNullOrEmpty(q.getPhone())) {
+        page = organizationRepository.findByNameContaining(q.getName(), pageable);
+      } else {
+        page =
+          organizationRepository.findByNameContainingAndPhone(q.getName(), q.getPhone(), pageable);
+      }
+      if (!page.hasContent()) {
+        return new PageImpl(Collections.emptyList());
+      }
+
+      // 批量获取对应的位置信息
+//      Set<Long> locationIds = page.getContent().stream().map(Organization::getLocationId).collect(toSet());
+//      List<Location> locations = locationRepository.findAll(locationIds);
+//      Map<Long, Location> locationMap =
+//        locations.stream().collect(Collectors.toMap(Location::getId, (l) -> l));
+
+      List<OrganizationInfo> list =  page.getContent().stream().map(org -> {
+        OrganizationInfo info = new OrganizationInfo();
+        info.setId(org.getId());
+        info.setName(org.getName());
+        info.setPhone(org.getPhone());
+        info.setShareNum(org.getShareNum().intValue());
+        //TODO
+        info.setSort(org.getHeat());
+        info.setStatus(org.getStatus().toString());
+        info.setModifier(org.getModifier());
+        info.setModifyTimeStr(
+                new DateTime( org.getModifyTime()).toString("yyyy-MM-dd HH:mm:ss"));
+        // 设置前端显示的位置
+        //Location lo = locationMap.get(org.getLocationId());
+        info.setLocation(org.getConAddress());
+        return info;
+      }).collect(Collectors.toList());
+
+      return new PageImpl(list, pageable, page.getTotalElements());
+    }
+
+  @Override
+  public void updateStatus(Long id, OpenStatus status,String name) {
+    Organization organizationInfo = organizationRepository.findOne(id);
+    if (organizationInfo == null) {
+      throw new BizException("机构不存在");
+    }
+
+    organizationInfo.setStatus(status.getCode());
+    Date now = DateTime.now().toDate();
+    organizationInfo.setModifyTime(now);
+    organizationInfo.setModifier(name);
+    organizationRepository.save(organizationInfo);
+
+    // 更新与机构相关联的文章
+    List<Article> articles = articleRepository.findByOrganizationId(id);
+    if (CollectionUtils.isEmpty(articles)) {
+      return;
+    }
+    articles.forEach(a -> {
+      a.setStatus(status.getCode());
+    });
+    articleRepository.save(articles);
+  }
+
+  @Override
+    public void saveOrganPicRescources(List<OrganizationResource> picList) {
+      /*
+       * 前端删除图片时已经对应的机构资源关系、资源记录等删除，而添加图片时仅保存了资源记录，
+       * 故此处保存，只需要将本次新加图片资源生成建立的机构资源关系，将存储在本地的图片上传至OSS
+       */
+      // 将本次新加图片资源关联到机构上
+      List<OrganizationResource> organResToAdd =
+        picList.stream().filter(or -> or.getId() == null).collect(toList());
+      if (!CollectionUtils.isEmpty(organResToAdd)) {
+        organizationResourceRepository.save(organResToAdd);
+      }
+
+      // 将本地图片资源上传到OSS中
+      List<Long> picResources =
+        picList.stream().map(OrganizationResource::getResourceId).collect(toList());
+      List<Resource> resources = resourceRepository.findAll(picResources);
+
+      List<Resource> picToUpload =
+        resources.stream().filter(r -> r.getPath().startsWith(Constants.LOCAL_UPLOAD_DIR))
+          .collect(toList());
+      if (CollectionUtils.isEmpty(picToUpload)) {
+        log.info("No new picResource to add");
+        return;
+      }
+
+      picToUpload.forEach(c -> {
+        log.info("Upload local file={} of rescource={} to OSS", c.getName(), c.getId());
+
+        File file = new File(c.getPath());
+        String ossFileUrl = ossService.upload("images/organ", file);
+        c.setPath(ossFileUrl);
+        c.setFile(c.getPath().replace(ossConfig.getDownloadEndpoint(), ""));
+        // 上传成功后删除本地图片
+        if (StringUtils.isNotBlank(ossFileUrl)) {
+          FileSystemUtils.deleteRecursively(file);
+        }
+      });
+
+      resourceRepository.save(picToUpload);
+    }
+
+    @Override
+    public Organization saveOrgan(Organization organ) {
+        Date now = DateTime.now().toDate();
+
+        Organization organToSave = null;
+        if (organ.getId() != null) {
+            organToSave = organizationRepository.findOne(organ.getId());
+            if (organToSave == null) {
+                throw new BizException("机构不存在");
+            }
+        } else {
+            organToSave = new Organization();
+            organToSave.setCreateTime(now);
+            organToSave.setStatus(OpenStatus.INVALID.getCode());
+        }
+
+        organToSave.setName(organ.getName());
+        organToSave.setHeat(organ.getHeat());
+        organToSave.setLatitude(organ.getLatitude());
+        organToSave.setLongitude(organ.getLongitude());
+        organToSave.setPhone(organ.getPhone());
+        organToSave.setLocationId(organ.getLocationId());
+        organToSave.setAddressDetail(organ.getAddressDetail());
+        organToSave.setShareNum(organ.getShareNum());
+        organToSave.setProfile(organ.getProfile());
+        organToSave.setDetail(organ.getDetail());
+        organToSave.setProvinceId(organ.getProvinceId());
+        organToSave.setCityId(organ.getCityId());
+        organToSave.setRegionId(organ.getRegionId());
+        organToSave.setConAddress(organ.getConAddress());
+        organToSave.setModifyTime(now);
+        organToSave.setModifier(organ.getModifier());
+       return  organizationRepository.save(organToSave);
+    }
+}
